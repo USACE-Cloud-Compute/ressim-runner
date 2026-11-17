@@ -31,7 +31,6 @@ data/*
 rss/HEC-ResSim-3.5.0.280/*
 cloud-compute/*
 .env
-Dockerfile.prod
 build/*
 build/tmp/*
 bin/*

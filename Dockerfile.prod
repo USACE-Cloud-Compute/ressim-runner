@@ -1,0 +1,72 @@
+FROM ubuntu:24.04 as builder
+ENV GRADLE_HOME=/opt/gradle/latest
+ENV PATH=${GRADLE_HOME}/bin:$PATH
+ARG RESSIM_VERSION=3.5.1.18-linuxbeta-linux-x86_64
+ARG RESSIM_HOME=HEC-ResSim-${RESSIM_VERSION}
+#need to get the jdk.
+RUN apt update &&\
+    apt upgrade -y &&\
+    apt-cache search openjdk-17 &&\
+    apt -y install openjdk-17-jre &&\
+    apt -y install openjdk-17-jdk &&\
+    apt -y install git &&\
+    apt -y install libgfortran5 &&\
+    apt -y install wget &&\
+    apt -y install unzip &&\
+    wget https://services.gradle.org/distributions/gradle-7.3.1-bin.zip -P /tmp &&\
+    unzip -d /opt/gradle /tmp/gradle-7.3.1-bin.zip &&\
+    ln -s /opt/gradle/gradle-7.3.1 /opt/gradle/latest &&\
+    wget https://www.hec.usace.army.mil/nexus/repository/maven-public/mil/army/usace/hec/ressim/hec-ressim/${RESSIM_VERSION}/hec-ressim-${RESSIM_VERSION}.tar.gz &&\
+    mkdir /${RESSIM_HOME} &&\
+    tar -xvzf /hec-ressim-${RESSIM_VERSION}.tar.gz -C /${RESSIM_HOME} --strip-components=1
+
+#cc-java-sdk is resolved by Gradle from its GitHub release (see build.gradle);
+#no jar is copied into /cloud-compute/jar any more.
+
+RUN mkdir -p /app
+WORKDIR /app
+#clone repo
+RUN git clone https://github.com/USACE-Cloud-Compute/ressim-runner.git
+WORKDIR /app/ressim-runner
+#everything the prod stage runs (jar, launcher, job script) comes out of this one
+#clone; check the layout here so a repo move fails the build instead of every startup.
+#/${RESSIM_HOME} is absolute - WORKDIR is /app/ressim-runner, and the builder's
+#RESSIM_HOME arg is a relative name.
+RUN test -x rss/ressim-runner.sh &&\
+    test -f rss/SimpleServer.py &&\
+    cp rss/SimpleServer.py /${RESSIM_HOME}/SimpleServer.py
+#build gradle
+RUN gradle build --no-daemon
+
+
+FROM ubuntu:24.04 as prod
+
+ARG RESSIM_VERSION=3.5.1.18-linuxbeta-linux-x86_64
+ARG RESSIM_HOME=HEC-ResSim-${RESSIM_VERSION}
+ENV RESSIM_HOME=/HEC-ResSim-${RESSIM_VERSION}
+ENV RESSIM_RUNNER_HOME=/ressim-runner
+RUN apt update
+RUN apt -y install libgfortran5
+#get built jar and put in prod container.
+RUN mkdir -p  /ressim-runner
+RUN apt -y install openjdk-17-jre
+
+COPY --from=builder /app/ressim-runner/build/libs /ressim-runner
+RUN mkdir -p  /${RESSIM_HOME}
+#SimpleServer.py rides along in this tree - the builder stage put it there from the clone.
+COPY --from=builder /${RESSIM_HOME} /${RESSIM_HOME}
+#entrypoint script from the clone, so the launcher and the jar are the same commit
+COPY --from=builder /app/ressim-runner/rss/ressim-runner.sh /app/ressim-runner.sh
+
+#COPY --from=builder /app/ressim-runner/configs/java.policy /ressim-runner/java.policy
+
+#ENV JAVA_EXE=$RSS_HOME/java/bin
+#ENV JAVA_HOME=$RSS_HOME/java
+ENV HEC_MAINCLASS="hec.server.RssRMIServer"
+#ENV PATH=:$RSS_HOME/java/bin/:$RSS_HOME/java/lib/:$PATH
+ENV CLASSPATH=${RESSIM_HOME}/lib/*:${RESSIM_HOME}/lib/hec/*:${RESSIM_HOME}/java/lib/*:${RESSIM_HOME}/jar/*:${RESSIM_HOME}/jar/ext/*:${RESSIM_HOME}/jar/sys/*:/ressim-runner/*
+
+
+WORKDIR /ressim-runner
+ENTRYPOINT ["/app/ressim-runner.sh"]
+ #cmd will append
