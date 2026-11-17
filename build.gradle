@@ -32,12 +32,12 @@ dependencies {
     implementation fileTree(dir: "/HEC-ResSim-3.5.1.18-linuxbeta-linux-x86_64/jar/sys", include: '*.jar')
     implementation fileTree(dir: "/cloud-compute/jar", include: '*.jar')
 }
-/*
+
 java {
     toolchain{
         languageVersion = JavaLanguageVersion.of(17)
     }
-}*/
+}
 jar {
     zip64 = true
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
