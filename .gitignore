@@ -26,10 +26,6 @@ gradle.properties
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 run/*
-configs/models/*
-data/*
-rss/HEC-ResSim-3.5.0.280/*
-cloud-compute/*
 .env
 build/*
 build/tmp/*

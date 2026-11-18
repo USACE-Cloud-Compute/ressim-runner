@@ -1,0 +1,34 @@
+Alignment Name=Stream Alignment
+
+Description=
+ModifiedTime=0
+_nextLineIndex=1
+_nextNodeIndex=3
+_nextJuncIndex=0
+Node=0
+Node StreamIdx=0
+Node Location=-771.9568567026195, 688.7519260400616
+Node Station=1818.8502597225568
+Node defaultStation=true
+Node Coord=1.0
+Node End
+
+Node=1
+Node StreamIdx=0
+Node Location=565.4853620955316, -543.9137134052387
+Node Station=0.0
+Node defaultStation=true
+Node Coord=0.0
+Node End
+
+Stream=0
+Stream Name= Stream1
+Stream Desc= 
+Stream RefPt= 565.4853620955316, -543.9137134052387
+
+Stream Region= 565.4853620955316, -543.9137134052387, -771.9568567026195, 688.7519260400616
+
+Stream Node=1
+Stream Node=0
+Stream End
+

@@ -1,0 +1,133 @@
+{
+    "stores": [
+        {
+            "name": "local",
+            "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+            "store_type": "FS",
+            "profile": "local",
+            "params": {
+                "root": "/workspaces/ressim-runner/data/"
+            }
+        }
+    ],
+    "attributes": {
+        "scenario": "local",
+        "outputroot": "simulation/local-output-data",
+        "watershed_name": "HundredFootDamSimpleFRA",
+        "wname": "SingleJunction",
+        "alternative_name": "RSAlt1_S",
+        "run_name": "RSAlt1_S--0",
+        "simulation_name": "1996.09.30-2400",
+        "network_name": "N1",
+        "wat_variant_name": "WAT-PO1-FRA",
+        "base_ressim_directory": "HundredFootDam",
+        "ressim_output": "HundredFootDam"
+    },
+    "inputs": [
+        {
+            "name": "/model/{ATTR::watershed_name}/",
+            "paths": {
+                "wksp": "{ATTR::scenario}/{ATTR::base_ressim_directory}/{ATTR::watershed_name}.wksp",
+                "projection": "{ATTR::scenario}/{ATTR::base_ressim_directory}/{ATTR::wname}.projection",
+                "stream.align": "{ATTR::scenario}/{ATTR::base_ressim_directory}/stream.align"
+            },
+            "store_name": "local"
+        },
+        {
+            "name": "/model/{ATTR::watershed_name}/rss/",
+            "paths": {
+                "simperiod": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}.simperiod",
+                "rss.conf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/rss.conf",
+                "Obs.fits": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::alternative_name}Obs.fits"
+            },
+            "store_name": "local"
+        },
+        {
+            "name": "/model/{ATTR::watershed_name}/rss/{ATTR::simulation_name}/",
+            "paths": {
+                "wksp": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/{ATTR::simulation_name}.wksp",
+                "stream.align": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/stream.align",
+                "simulation.dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/simulation.dss"
+            },
+            "store_name": "local"
+        },
+        {
+            "name": "/model/{ATTR::watershed_name}/rss/{ATTR::simulation_name}/shared/",
+            "paths": {
+                "flows.dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/shared/flows.dss"
+            },
+            "store_name": "local"
+        },
+        {
+            "name": "/model/{ATTR::watershed_name}/shared/",
+            "paths": {
+                "flows.dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/shared/flows.dss"
+            },
+            "store_name": "local"
+        },
+        {
+            "name": "/model/{ATTR::watershed_name}/rss/{ATTR::simulation_name}/rss/",
+            "paths": {
+                "simrun": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::alternative_name}--.simrun",
+                "simperiod": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::simulation_name}.simperiod",
+                "rssrun": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}.rssrun",
+                "dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}.dss",
+                "rsys": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}.rsys",
+                "fits": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.fits",
+                "igv": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.igv",
+                "malt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.malt",
+                "ralt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.ralt",
+                "Obs-run.fits": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}Obs.fits",
+                "wat-fits": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}{ATTR::wat_variant_name}.fits",
+                "wat-igv": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}{ATTR::wat_variant_name}.igv",
+                "mcscript": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.mcscript",
+                "mcscripts": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}.mcscripts",
+                "Op.dbf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}Op.dbf",
+                "Op.dbt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}Op.dbt",
+                "Op.mdx": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}Op.mdx",
+                "SysOp.dbf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}SysOp.dbf",
+                "SysOp.dbt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}SysOp.dbt",
+                "SysOp.mdx": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}SysOp.mdx",
+                "resop.dbf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/resop.dbf",
+                "resop.dbt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/resop.dbt",
+                "resop.mdx": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/resop.mdx",
+                "ressysop.dbf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/ressysop.dbf",
+                "ressysop.dbt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/ressysop.dbt",
+                "ressysop.mdx": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/ressysop.mdx",
+                "rss.conf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/rss.conf"
+            },
+            "store_name": "local"
+        }
+    ],
+    "outputs": [
+        {
+            "name": "/model/{ATTR::watershed_name}/rss/{ATTR::simulation_name}/",
+            "paths": {
+                "simulation.dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/{ATTR::outputroot}/simulation.dss"
+            },
+            "store_name": "local"
+        }
+    ],
+    "actions": [
+        {
+            "type": "compute_simulation",
+            "description": "computing RSAlt1_S in simulation 1996.09.30-2400",
+            "attributes": {
+                "project_file": "/model/HundredFootDamSimpleFRA/HundredFootDamSimpleFRA.wksp"
+            },
+            "stores": [
+                {
+                    "name": "local",
+                    "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+                    "store_type": "FS",
+                    "profile": "local",
+                    "params": {
+                        "root": "/"
+                    }
+                }
+            ],
+            "inputs": [],
+            "outputs": []
+        }
+    ]
+}

@@ -1,0 +1,76 @@
+RssAlt Name=RSAlt1_S--0:RSAlt1_S
+RssAlt Description=
+Version=1001
+ModifiedTime=1682092497168
+NetworkID=2
+System Path=rss/RSAlt1_S--0_N1.rsys
+Operations Path=
+InputTSData Path=rss/RSAlt1_S--0_RSAlt1_S.fits
+OutputTSData Path=
+InputGVData Path=rss/RSAlt1_S--0_RSAlt1_S.igv
+OutputVerticalDatum=AS_DEFINED
+FlowComputeType=0
+ComputeHoldouts=false
+ComputeUnreg=true
+ComputeCumLoc=true
+CopyOverrides=false
+UseObsTSData=false
+LogLevel=3
+UseYieldAnalysis=false
+ReservoirYieldAnalysisBegin
+YieldAnalysisBegin
+UseHydropowerRules=false
+MaxIteration=25
+UseBisectionOnly=true
+MaxHeuristicIterations=8
+YieldAnalysisEnd
+ReservoirYieldAnalysisEnd
+TimeStep=6
+TimeIncrement=2
+ObservedTSData Path=rss/RSAlt1_S--0_RSAlt1_SObs.fits
+resOpSelection=1,1
+ReplaceAllReleaseOverrides=false
+UseDiffAltResultsTableBegin
+UseDiffAltResultsTableEnd
+DssOutputDataBegin
+WriteAllDssOutput;true
+WriteAllInputDss;true
+DssOutputDataEnd
+Hindcast=~E2:F;14;3;-Infinity
+Hindcast=~E2:F;15;2;-Infinity
+Hindcast=~E7:F;96;1;0.0
+Hindcast=~E8:F;41;1;0.0
+InputTsVariant=WAT-PO1-FRA,true
+UsingInflowFactors=false
+InflowFactorType=0
+GlobalInflowFactor=1.0
+Hotstart Options
+CreateHotStart:false
+SaveAtEnd:false
+SaveAtLookback:false
+SaveAtInterval:false
+IntervalDateTime:
+TimeStep:1
+TimeIncrement:2
+SaveAtDateTime:false
+TimeStepsToSave:0.0
+LoadHotstart:false
+Hotstart End
+PlugInDataBegin
+PlugIn:Monte Carlo
+MinIterations:-2147483648
+MaxIterations:-2147483648
+LastIteration:0
+CumulativeTime:0
+SimulationOption:0
+ScriptFilePath:rss/RSAlt1_S--0_RSAlt1_S.mcscript
+IterationString:
+Compute:false
+StandAloneRandomSeed:0.0
+PlugInEnd
+PlugIn:Ensemble
+EnsembleMembersString:
+Compute:false
+UseMultithreadedCompute:false
+PlugInEnd
+PlugInDataEnd

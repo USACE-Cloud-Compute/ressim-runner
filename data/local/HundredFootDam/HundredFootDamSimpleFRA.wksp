@@ -1,0 +1,27 @@
+WorkspaceName=HundredFootDamSimpleFRA
+WorkspaceDescription=
+Version=1001
+AppVersion=3.5.0.379
+ModifiedTime=1682624862911
+UnitSystemID=1
+GmtOffset=0
+Extents=-1000.0,1000.0,-1000.0,1000.0
+
+CoordinateInfoBegin
+type=X-Y
+units=U.S. Feet
+unitMult=1.0
+spheroid=null
+CoordinateInfoEnd
+
+Grow Extents=true
+ManagerIndex=40955
+
+ManagerProxyBegin
+Name=Stream Alignment
+Description=
+Path=stream.align
+Class=hec.model.StreamAlignment
+Index=0
+ModifiedTime=9223372036854775807
+ManagerProxyEnd

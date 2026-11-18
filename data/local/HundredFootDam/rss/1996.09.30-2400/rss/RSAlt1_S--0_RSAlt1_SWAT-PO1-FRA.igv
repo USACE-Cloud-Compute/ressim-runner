@@ -1,0 +1,25 @@
+ModifiedTime=1682092265020
+GVDataSet Name=RSAlt1_S--0:RSAlt1_S-WAT-PO1-FRA
+Description=(GV Data Set for WAT-PO1-FRA)
+
+GVRecord=SCALAR
+GVRecord Name=BreachElev
+GVRecord ID=0
+GVRecord DssFilename=simulation.dss
+GVRecord DssPathname=//BreachElev///Double/RSAlt1_S-ResSim-Default/
+GVRecord DataLocation=false
+GVRecord LinkedLocation=
+GVRecord LinkedModel=
+GVRecord End
+
+GVRecord=SCALAR
+GVRecord Name=BreachDuration
+GVRecord ID=1
+GVRecord DssFilename=simulation.dss
+GVRecord DssPathname=//BreachDuration///Double/RSAlt1_S-ResSim-Default/
+GVRecord DataLocation=false
+GVRecord LinkedLocation=
+GVRecord LinkedModel=
+GVRecord End
+
+

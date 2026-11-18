@@ -1,0 +1,16 @@
+TSDataSet Name=RSAlt1_S--0:RSAlt1_S
+Description=(TS Data Set)
+
+_type=0
+ParentPath=null
+ParentClass=null
+TSRecord=0
+TSRecord Name=Inflow1
+TSRecord VariableId=4
+TSRecord ParamName=Flow
+TSRecord DssFilename=shared/flows.dss
+TSRecord DssPathname=/MAIN RIVER/MAIN AT FORK DAM/FLOW//1DAY/USGS/
+TSRecord InputPosition=0
+TSRecord End=
+
+
