@@ -14,12 +14,10 @@
         "scenario": "local",
         "outputroot": "simulation/local-output-data",
         "watershed_name": "HundredFootDamSimpleFRA",
-        "wname": "SingleJunction",
         "alternative_name": "RSAlt1_S",
         "run_name": "RSAlt1_S--0",
         "simulation_name": "1996.09.30-2400",
         "network_name": "N1",
-        "wat_variant_name": "WAT-PO1-FRA",
         "base_ressim_directory": "HundredFootDam",
         "ressim_output": "HundredFootDam"
     },
@@ -28,7 +26,6 @@
             "name": "/model/{ATTR::watershed_name}/",
             "paths": {
                 "wksp": "{ATTR::scenario}/{ATTR::base_ressim_directory}/{ATTR::watershed_name}.wksp",
-                "projection": "{ATTR::scenario}/{ATTR::base_ressim_directory}/{ATTR::wname}.projection",
                 "stream.align": "{ATTR::scenario}/{ATTR::base_ressim_directory}/stream.align"
             },
             "store_name": "local"
@@ -52,20 +49,6 @@
             "store_name": "local"
         },
         {
-            "name": "/model/{ATTR::watershed_name}/rss/{ATTR::simulation_name}/shared/",
-            "paths": {
-                "flows.dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/shared/flows.dss"
-            },
-            "store_name": "local"
-        },
-        {
-            "name": "/model/{ATTR::watershed_name}/shared/",
-            "paths": {
-                "flows.dss": "{ATTR::scenario}/{ATTR::base_ressim_directory}/shared/flows.dss"
-            },
-            "store_name": "local"
-        },
-        {
             "name": "/model/{ATTR::watershed_name}/rss/{ATTR::simulation_name}/rss/",
             "paths": {
                 "simrun": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::alternative_name}--.simrun",
@@ -78,8 +61,6 @@
                 "malt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.malt",
                 "ralt": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.ralt",
                 "Obs-run.fits": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}Obs.fits",
-                "wat-fits": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}{ATTR::wat_variant_name}.fits",
-                "wat-igv": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}{ATTR::wat_variant_name}.igv",
                 "mcscript": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::alternative_name}.mcscript",
                 "mcscripts": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}.mcscripts",
                 "Op.dbf": "{ATTR::scenario}/{ATTR::base_ressim_directory}/rss/{ATTR::simulation_name}/rss/{ATTR::run_name}_{ATTR::network_name}Op.dbf",
