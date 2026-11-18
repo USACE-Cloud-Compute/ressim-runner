@@ -1,0 +1,500 @@
+# =============================================================================
+# Build & publish the ressim-runner image from Dockerfile.prod, off a release tag.
+#
+# House pattern from seed-generator-plugin/.github/workflows/build-push-ghcr.yml,
+# with two repo-specific adaptations: linux/amd64 only, and the publish job
+# creates a manifest for every tag rather than only `latest` (as written, the
+# house template leaves `:1.2.3` unresolvable and only `:latest` real).
+#
+# Triggers
+#   release: published   Publishing a GitHub Release creates the tag, so this is
+#                        tag-driven with a human gate in between.
+#   workflow_dispatch    Rebuild any ref; pushes only if you tick the box.
+#   pull_request         Build + smoke test, never pushes. Delete this trigger if
+#                        you want the file to match the house template exactly.
+#
+# Do NOT also add `push: tags: v*`. Publishing a release creates the tag, so both
+# events fire, the release is built twice, and the two runs race on `latest`. To
+# use tag-push instead, replace the `release:` block with:
+#   push:
+#     tags: [v*]
+#
+# amd64 only: Dockerfile.prod downloads hec-ressim-<version>.tar.gz for
+# `3.5.1.18-linuxbeta-linux-x86_64` and build.gradle resolves the ResSim classes
+# from /HEC-ResSim-<that same name>/jar. There is no arm64 artifact, so an arm64
+# job cannot compile. To add one later: append the matrix entry, add the arch to
+# ARCHES, and the publish job merges it into every tag automatically.
+# =============================================================================
+name: Build & Publish (Dockerfile.prod to GHCR)
+
+on:
+  release:
+    types:
+      - published
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or SHA to build
+        type: string
+        default: main
+      build_args:
+        description: Extra --build-arg values, one KEY=VALUE per line
+        type: string
+        required: false
+        default: ""
+      push:
+        description: Push the image to the registry
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: image-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  REGISTRY: ghcr.io
+  # Lowercase, unlike the GitHub org login: ghcr.io rejects uppercase in image
+  # names, so this must not be replaced with github.repository_owner.
+  OWNER: usace-cloud-compute
+  IMAGE_NAME: ressim-runner
+  DOCKERFILE: Dockerfile.prod
+  TAG: latest
+  # Must match the matrix below; the publish job reads it.
+  ARCHES: amd64
+  # Prod-stage layout that the smoke test asserts on, per Dockerfile.prod.
+  SMOKE_LAUNCHER: /app/ressim-runner.sh
+  SMOKE_SERVER: SimpleServer.py
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs_on: ubuntu-latest
+            platforms: linux/amd64
+            suffix: amd64
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      minor: ${{ steps.version.outputs.minor }}
+      major: ${{ steps.version.outputs.major }}
+      latest: ${{ steps.mode.outputs.latest }}
+      digest: ${{ steps.build.outputs.digest }}
+      published: ${{ steps.mode.outputs.push }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0 # only used to decide whether a dispatch build is the newest tag
+          persist-credentials: false
+
+      - name: Resolve the release tag and what this run should do
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_MAKE_LATEST: ${{ github.event.release.make_latest }}
+          DISPATCH_PUSH: ${{ inputs.push }}
+        run: |
+          set -euo pipefail
+          # Prefer the event payload over GITHUB_REF_NAME so the version cannot
+          # come from a different ref than the release notes.
+          tag="${RELEASE_TAG:-${GITHUB_REF_NAME}}"
+
+          push="false"
+          case "${EVENT}" in
+            release) push="true" ;;
+            workflow_dispatch) push="${DISPATCH_PUSH:-false}" ;;
+          esac
+
+          # `latest` follows the release's own "set as the latest release" box.
+          latest="false"
+          if [[ "${EVENT}" == "release" ]]; then
+            if [[ "${RELEASE_PRERELEASE}" != "true" && "${RELEASE_MAKE_LATEST}" != "false" ]]; then
+              latest="true"
+            fi
+          elif [[ "${push}" == "true" ]]; then
+            pre="false"
+            case "${tag}" in *[-+]*) pre="true" ;; esac
+            # Suffixed tags are dropped from the candidate list: a build suffix
+            # sorts after its base version and must not block `latest` forever.
+            newest="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-' | head -n1 || true)"
+            if [[ "${pre}" == "false" && ( -z "${newest}" || "${newest}" == "${tag}" ) ]]; then
+              latest="true"
+            fi
+          fi
+
+          {
+            echo "tag=${tag}"
+            echo "push=${push}"
+            echo "latest=${latest}"
+          } >> "$GITHUB_OUTPUT"
+          echo "event=${EVENT} tag=${tag} push=${push} latest=${latest}"
+
+      - name: Get tag version
+        id: version
+        env:
+          TAG_NAME: ${{ steps.mode.outputs.tag }}
+          IS_RELEASE: ${{ github.event_name == 'release' }}
+        run: |
+          set -euo pipefail
+          version=""
+          minor=""
+          major=""
+          prerelease="false"
+
+          if [[ "${IS_RELEASE}" == "true" || "${TAG_NAME}" =~ ^v[0-9] ]]; then
+            # Fail loudly rather than tag an image after the literal ref name.
+            if ! [[ "${TAG_NAME}" =~ ^v[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error title=Unusable tag::'${TAG_NAME}' is not v<digits>[.<digits>...][-suffix]"
+              echo "Use tags like v3.5.1.18 or v3.5.1.18-2."
+              exit 1
+            fi
+            version="${TAG_NAME#v}"
+            # House arithmetic: minor drops the last component, major keeps the
+            # first. For 3.5.1.18 that is minor=3.5.1, major=3.
+            minor="${version%.*}"
+            major="${version%%.*}"
+            if [[ "${version}" != "${version%%[-+]*}" ]]; then
+              prerelease="true"
+              # A series pointer must never land on a candidate build.
+              minor=""
+              major=""
+            fi
+            if [[ "${minor}" == "${version}" ]]; then
+              minor=""
+            fi
+            if [[ "${major}" == "${minor}" || "${major}" == "${version}" ]]; then
+              major=""
+            fi
+          fi
+
+          {
+            echo "version=${version}"
+            echo "minor=${minor}"
+            echo "major=${major}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=${version:-<none>} minor=${minor:-<none>} major=${major:-<none>} prerelease=${prerelease}"
+
+      - name: Check the ResSim version matches between Dockerfile.prod and build.gradle
+        run: |
+          set -euo pipefail
+          ver="$(sed -n 's/^ARG RESSIM_VERSION=\(.*\)$/\1/p' "${DOCKERFILE}" | head -n1)"
+          if [[ -z "${ver}" ]]; then
+            echo "::error title=No RESSIM_VERSION::could not read the ARG from ${DOCKERFILE}"
+            exit 1
+          fi
+          echo "Dockerfile.prod RESSIM_VERSION=${ver}"
+          # build.gradle resolves the ResSim classes through a hardcoded directory
+          # name. Drift between the two fails as a Gradle dependency error deep
+          # inside the image build; check it here where the message is obvious.
+          if ! grep -Fq "/HEC-ResSim-${ver}/jar" build.gradle; then
+            echo "::error title=ResSim version mismatch::${DOCKERFILE} builds ${ver}, but build.gradle does not reference /HEC-ResSim-${ver}/jar"
+            grep -n "HEC-ResSim" build.gradle || true
+            exit 1
+          fi
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: steps.mode.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.title=HEC-ResSim Runner
+            org.opencontainers.image.description=Cloud Compute plugin image for HEC-ResSim
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}-${{ matrix.suffix }},enable=${{ steps.version.outputs.version != '' }}
+            type=raw,value=${{ steps.version.outputs.minor }}-${{ matrix.suffix }},enable=${{ steps.version.outputs.minor != '' }}
+            type=raw,value=${{ steps.version.outputs.major }}-${{ matrix.suffix }},enable=${{ steps.version.outputs.major != '' }}
+            type=raw,value=${{ env.TAG }}-${{ matrix.suffix }}
+            type=sha,format=long,prefix=,suffix=-${{ matrix.suffix }}
+
+      - name: Pick this job's image reference
+        id: primary
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          ref="$(printf '%s\n' "${TAGS}" | sed '/^[[:space:]]*$/d' | head -n1)"
+          if [[ -z "${ref}" ]]; then
+            echo "::error title=No image tag produced::check the Derive tags step"
+            exit 1
+          fi
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "This job's image: ${ref}"
+
+      - name: Build & push single-arch image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ env.DOCKERFILE }}
+          platforms: ${{ matrix.platforms }}
+          push: ${{ steps.mode.outputs.push == 'true' }}
+          # Build-only runs load into the runner's daemon so the smoke test can
+          # start the image.
+          load: ${{ steps.mode.outputs.push != 'true' }}
+          # Keep a plain image manifest: with buildx's default attestation the
+          # pushed digest is an attestation index, which the publish job would
+          # then merge by the wrong digest and older container stacks refuse.
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Inert until Dockerfile.prod declares these ARGs; BuildKit warns
+          # "One or more build-args [...] were not consumed" and carries on, so
+          # no Dockerfile change is needed to run this pipeline today. Delete
+          # these three lines plus the secrets block if you would rather not
+          # pass them at all.
+          build-args: |
+            GIT_URL=https://github.com/${{ github.repository }}.git
+            GIT_REF=${{ steps.mode.outputs.tag }}
+            GIT_SHA=${{ github.sha }}
+            ${{ inputs.build_args }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
+          # Unused today. If the repo goes private the in-build clone needs
+          # credentials, and they belong in a build secret: build args are
+          # recorded in `docker history` of the published image.
+          secrets: |
+            git_token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the pushed image back from GHCR
+        if: steps.mode.outputs.push == 'true'
+        env:
+          IMAGE_REF: ${{ steps.primary.outputs.ref }}
+        run: |
+          set -euo pipefail
+          # `load` is off when `push` is on, so the daemon has nothing locally,
+          # and pulling back means the smoke test runs against what the registry
+          # is serving rather than against the local build cache.
+          docker pull --quiet "${IMAGE_REF}"
+          docker image inspect --format 'local id={{.Id}} size={{.Size}}' "${IMAGE_REF}"
+
+      - name: Smoke test the image
+        env:
+          IMAGE_REF: ${{ steps.primary.outputs.ref }}
+          LAUNCHER: ${{ env.SMOKE_LAUNCHER }}
+          SERVER: ${{ env.SMOKE_SERVER }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --entrypoint sh \
+            -e LAUNCHER="${LAUNCHER}" \
+            -e SERVER="${SERVER}" \
+            "${IMAGE_REF}" -lc '
+              set -eu
+              echo "== java =="
+              command -v java >/dev/null 2>&1 || { echo "FAIL: no java on PATH"; exit 1; }
+              java -version 2>&1 | head -n 1
+
+              echo "== launcher =="
+              test -x "${LAUNCHER}" || { echo "FAIL: ${LAUNCHER} missing or not executable"; exit 1; }
+
+              # The launcher ends with: java ... -jar $RESSIM_RUNNER_HOME/NAME.jar
+              # with the version spelled out in the script, and build.gradle sets
+              # that version independently. If they disagree the image builds and
+              # pushes green and every container dies at startup, so assert the
+              # pairing here rather than in a job that failed an hour later.
+              echo "== plugin jar named by the launcher =="
+              test -n "${RESSIM_RUNNER_HOME:-}" || { echo "FAIL: RESSIM_RUNNER_HOME not set"; exit 1; }
+              want="$(grep -o "ressim-runner-[A-Za-z0-9._-]*\.jar" "${LAUNCHER}" | head -n1)"
+              test -n "${want}" || { echo "FAIL: no ressim-runner-*.jar reference in ${LAUNCHER}"; exit 1; }
+              test -f "${RESSIM_RUNNER_HOME}/${want}" \
+                || { echo "FAIL: ${RESSIM_RUNNER_HOME}/${want} absent -- build.gradle version and the launcher are out of step"; ls -l "${RESSIM_RUNNER_HOME}"; exit 1; }
+              echo "found ${want} in ${RESSIM_RUNNER_HOME}"
+
+              echo "== ressim tree =="
+              test -n "${RESSIM_HOME:-}" || { echo "FAIL: RESSIM_HOME not set in the image"; exit 1; }
+              test -f "${RESSIM_HOME%/}/${SERVER}" \
+                || { echo "FAIL: ${SERVER} absent from ${RESSIM_HOME}"; exit 1; }
+              test -d "${RESSIM_HOME%/}/jar" \
+                || { echo "FAIL: ${RESSIM_HOME}/jar missing -- the tarball did not unpack"; exit 1; }
+              test -d "${RESSIM_HOME%/}/config" \
+                || { echo "FAIL: ${RESSIM_HOME}/config missing -- the launcher points JVM properties at it"; exit 1; }
+              echo "smoke test OK"
+            '
+
+      - name: Probe the container entrypoint (informational)
+        env:
+          IMAGE_REF: ${{ steps.primary.outputs.ref }}
+        run: |
+          set -uo pipefail
+          # Start the real ENTRYPOINT briefly. 124 = still running when the timer
+          # fired, which is what a server image should do. Not a gate: the
+          # launcher may legitimately exit without a job to run. Read this once,
+          # then decide whether it earns a place in the gate.
+          out="$(mktemp)"
+          timeout 25 docker run --rm "${IMAGE_REF}" >"${out}" 2>&1
+          rc=$?
+          {
+            echo "### Entrypoint probe (${IMAGE_REF})"
+            echo
+            echo "exit=${rc} -- 124 = still running when the timer fired"
+            echo
+            echo '```'
+            tail -n 15 "${out}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'entrypoint probe exit=%s\n' "${rc}"
+
+      - name: Record image size
+        env:
+          IMAGE_REF: ${{ steps.primary.outputs.ref }}
+        run: |
+          set -euo pipefail
+          bytes="$(docker image inspect --format '{{.Size}}' "${IMAGE_REF}")"
+          echo "image size: $(numfmt --to=iec --suffix=B "${bytes}") (${bytes} bytes)"
+          docker history --format '{{.Size}}  {{.CreatedBy}}' "${IMAGE_REF}" 2>/dev/null | head -n 10 || true
+
+  publish:
+    name: Publish manifest (by tags)
+    needs: [build]
+    if: needs.build.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # append the image reference to the GitHub release notes
+      packages: write
+
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out which tags must exist
+        id: want
+        env:
+          BASE: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE_NAME }}
+          VERSION: ${{ needs.build.outputs.version }}
+          MINOR: ${{ needs.build.outputs.minor }}
+          MAJOR: ${{ needs.build.outputs.major }}
+          LATEST: ${{ needs.build.outputs.latest }}
+          SHA_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          bases=()
+          [[ -n "${VERSION}" ]] && bases+=("${VERSION}")
+          [[ -n "${MINOR}" ]] && bases+=("${MINOR}")
+          [[ -n "${MAJOR}" ]] && bases+=("${MAJOR}")
+          bases+=("${SHA_TAG}")
+          if [[ "${LATEST}" == "true" ]]; then
+            bases+=("${TAG}")
+          else
+            echo "::notice title=:${TAG} untouched::this build does not move the ${TAG} tag"
+          fi
+
+          # One "base tag<TAB>arch tags" row per tag that must end up real.
+          plan="${RUNNER_TEMP}/tagplan.tsv"
+          : > "${plan}"
+          for b in "${bases[@]}"; do
+            srcs=""
+            for a in ${ARCHES}; do
+              srcs="${srcs} ${BASE}:${b}-${a}"
+            done
+            printf '%s\t%s\n' "${b}" "${srcs# }" >> "${plan}"
+          done
+          echo "Tags to publish:"
+          awk -F'\t' '{printf "  %-45s <-%s\n", $1, $2}' "${plan}"
+          echo "plan=${plan}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push manifest (by tags)
+        env:
+          PLAN: ${{ steps.want.outputs.plan }}
+          BASE: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE_NAME }}
+        run: |
+          set -euo pipefail
+          rows="${RUNNER_TEMP}/published.tsv"
+          : > "${rows}"
+          while IFS=$'\t' read -r base srcs; do
+            [[ -n "${base}" ]] || continue
+            # A missing arch tag would otherwise produce a manifest that quietly
+            # omits an architecture.
+            for ref in ${srcs}; do
+              if ! docker buildx imagetools inspect "${ref}" >/dev/null 2>&1; then
+                echo "::error title=Missing arch tag::${ref} was never pushed"
+                exit 1
+              fi
+            done
+            # shellcheck disable=SC2086  # word-splitting the arch list is intended
+            docker buildx imagetools create -t "${BASE}:${base}" ${srcs} >/dev/null
+            digest="$(docker buildx imagetools inspect "${BASE}:${base}" --format '{{json .Manifest}}' | jq -r '.digest')"
+            printf '%s\t%s\t%s\n' "${base}" "${digest}" "${srcs}" >> "${rows}"
+            echo "${BASE}:${base} -> ${digest}"
+          done < "${PLAN}"
+
+      - name: Inspect final manifest
+        env:
+          BASE: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE_NAME }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          # A dispatch rebuild has no version tag, so fall back to the commit tag.
+          docker buildx imagetools inspect "${BASE}:${VERSION:-${GITHUB_SHA}}"
+
+      - name: Report and annotate the release
+        if: github.event_name == 'release'
+        continue-on-error: true # a missing release note must not undo a publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ env.IMAGE_NAME }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          rows="${RUNNER_TEMP}/published.tsv"
+          {
+            echo "### Published image tags"
+            echo
+            echo "| tag | digest |"
+            echo "| --- | --- |"
+            while IFS=$'\t' read -r base digest _; do
+              printf '| `%s:%s` | `%s` |\n' "${BASE}" "${base}" "${digest}"
+            done < "${rows}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            old="$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json body -q .body || true)"
+            {
+              printf '%s\n\n' "${old}"
+              printf '## Container image\n\n'
+              printf '```\n'
+              while IFS=$'\t' read -r base digest _; do
+                printf '%s:%s\n  @%s\n' "${BASE}" "${base}" "${digest}"
+              done < "${rows}"
+              printf '```\n'
+              printf '\nPin the digest, not the tag.\n'
+            } > "${RUNNER_TEMP}/notes.md"
+            gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --notes-file "${RUNNER_TEMP}/notes.md"
+          else
+            echo "No GitHub release for ${TAG}; skipping the notes update."
+          fi

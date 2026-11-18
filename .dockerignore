@@ -1,0 +1,45 @@
+# Dockerfile.prod copies NOTHING out of the build context -- every COPY is
+# --from=builder -- so the context only has to carry the Dockerfile itself.
+# A fat context is real wall-clock: it is tarred and uploaded to the daemon
+# before the first layer is even considered.
+#
+# Do not add "Dockerfile*" here: the daemon still has to read the Dockerfile.
+
+# --- VCS / CI -----------------------------------------------------------------
+.git
+.gitignore
+.github
+.gitattributes
+
+# --- Gradle / Java output (the builder stage rebuilds all of it) --------------
+.gradle
+build/
+**/build/
+!rss/**/build/
+**/*.class
+cc-java-sdk-*.jar
+
+# --- .NET / IDE scratch -------------------------------------------------------
+**/obj/
+**/bin/
+**/.idea/
+**/.vscode/
+**/*.iml
+**/*.user
+
+# --- Big binaries that must never ride in as context --------------------------
+# If you stage cc-java-sdk-1.1.2-all.jar inside the context for an air-gapped
+# build (-PccSdkFile=/path/to/jar), delete the three lines below.
+HEC-ResSim*/
+**/*.jar
+**/*.tar.gz
+**/*.tgz
+**/*.zip
+
+# --- Docs, logs, local scratch -------------------------------------------------
+docs/
+**/*.md
+**/*.log
+dist/
+screenshots/
+qa/
