@@ -34,6 +34,7 @@ HEC_JVMPARAMS="$HEC_JVMPARAMS \
 #: Log Definitions                                      :
 #:------------------------------------------------------:
 HEC_JVMPARAMS="$HEC_JVMPARAMS \
+--add-exports=\"java.rmi/sun.rmi.transport=ALL-UNNAMED\" \
 -Dlogfile.directory=\"$XDG_CACHE_HOME/HEC/HEC-ResSim/3.5/logs/\" \
 -DLOGFILE=\"$XDG_CACHE_HOME/HEC/HEC-ResSim/3.5/logs/HEC-ResSim.log\" \
 -DDSSLOGFILE=\"$XDG_CACHE_HOME/HEC/HEC-ResSim/3.5/logs/HEC-ResSim_DSS.log\" \
