@@ -1,6 +1,6 @@
 # Throwaway diagnostic: why does GHCR deny this workflow's push?
-# Run it from Actions -> "ghcr write probe" -> Run workflow. ~40 seconds, no build.
-# Delete this file once the push works.
+# Run from Actions -> "ghcr write probe" -> Run workflow. ~40 seconds, no build.
+# Delete this file once the real push works.
 name: ghcr write probe
 
 on:
@@ -17,35 +17,42 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Who is running, and what scopes does the token actually carry?
+      # Without this the push below fails with "unauthorized: authentication
+      # required" and tells you nothing about write permission.
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: What scopes does the registry actually grant this token?
         run: |
           set -uo pipefail
-          echo "actor            = ${GITHUB_ACTOR}"
-          echo "repository       = ${GITHUB_REPOSITORY}"
-          echo "event            = ${GITHUB_EVENT_NAME}"
+          echo "actor      = ${GITHUB_ACTOR}"
+          echo "repository = ${GITHUB_REPOSITORY}"
+          echo "event      = ${GITHUB_EVENT_NAME}"
 
           echo
-          echo "== 1. token scopes requested from the registry =="
+          echo "== 1. access claims in the token ghcr mints for us =="
           jwt="$(curl -sS -u "unused:${GITHUB_TOKEN}" \
                  "https://ghcr.io/token?service=ghcr.io&scope=repository:${PKG}:pull,push" \
                  | jq -r '.token // "NONE"')"
           if [[ "${jwt}" == "NONE" ]]; then
             echo "registry refused to mint a token for GITHUB_TOKEN at all"
           else
-            # access[] shows the actions the registry is willing to grant.
-            # A missing "push" here explains permission_denied: write_package.
+            # A "push" action missing here explains permission_denied: write_package.
             printf '%s' "${jwt}" | cut -d. -f2 | base64 -d 2>/dev/null \
               | jq -c '{access: .access, granted_to: .sub, issuer: .iss}'
           fi
 
           echo
-          echo "== 2. does the package already exist? =="
+          echo "== 2. has the package ever been created? =="
           code="$(curl -sS -o "${RUNNER_TEMP}/tags.json" -w '%{http_code}' \
                   -u "unused:${GITHUB_TOKEN}" "https://ghcr.io/v2/${PKG}/tags/list")"
           echo "HTTP ${code}"
           head -c 400 "${RUNNER_TEMP}/tags.json"; echo
-          echo "404/NAME_UNKNOWN -> no push has ever created this package, so this"
-          echo "                   run is a package *creation*, which is its own check"
+          echo "(NAME_UNKNOWN = no push has ever landed, so the failing push is a"
+          echo " package *creation*, which GitHub authorizes separately from a write)"
 
           echo
           echo "== 3. the real test: push a 1 KB image =="
@@ -53,29 +60,36 @@ jobs:
           echo probe > marker
           printf 'FROM scratch\nCOPY marker /\n' > Dockerfile
           docker build -q -t "ghcr.io/${PKG}:push-probe" . | tail -n1
-          if docker push "ghcr.io/${PKG}:push-probe" 2>&1 | tail -n 5; then
-            echo "RESULT: GITHUB_TOKEN can push. The pipeline's failure is elsewhere."
+          if docker push "ghcr.io/${PKG}:push-probe" 2>&1 | tail -n 6; then
+            echo "VERDICT: GITHUB_TOKEN can push. The pipeline failure is elsewhere."
           else
-            echo "RESULT: GITHUB_TOKEN cannot push."
+            echo "VERDICT: GITHUB_TOKEN cannot push."
           fi
 
-      - name: Same push with a PAT, if GHCR_PAT is defined
-        if: ${{ secrets.GHCR_PAT != '' }}
-        run: |
-          set -uo pipefail
-          d="${RUNNER_TEMP}/probe2"; mkdir -p "${d}"; cd "${d}"
-          echo probe > marker
-          printf 'FROM scratch\nCOPY marker /\n' > Dockerfile
-          echo "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
-          docker build -q -t "ghcr.io/${PKG}:push-probe" . | tail -n1
-          if docker push "ghcr.io/${PKG}:push-probe" 2>&1 | tail -n 5; then
-            echo "RESULT: a PAT pushes while GITHUB_TOKEN does not -> the block is on"
-            echo "        the workflow identity (SAML SSO enforcement, or org rules on"
-            echo "        who may CREATE a package), not on the image or the Dockerfile."
-          else
-            echo "RESULT: even the PAT was denied -> the package namespace itself is"
-            echo "        refusing writes for this publisher."
-          fi
+      # The secrets context is not available in an `if:` expression, so the skip
+      # happens inside the script instead. Add a GHCR_PAT repository secret
+      # (write:packages, SSO-authorized if the org enforces SAML) to get the
+      # comparison; without it this step just reports skipped.
+      - name: Same push with a PAT, for comparison
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          set -uo pipefail
+          if [[ -z "${GHCR_PAT:-}" ]]; then
+            echo "No GHCR_PAT secret -> nothing to compare against. Add one to make"
+            echo "step 3 above distinguish SSO/creation rules from a registry problem."
+            exit 0
+          fi
+          d="${RUNNER_TEMP}/probe2"; mkdir -p "${d}"; cd "${d}"
+          echo probe > marker
+          printf 'FROM scratch\nCOPY marker /\n' > Dockerfile
+          printf '%s' "${GHCR_PAT}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+          docker build -q -t "ghcr.io/${PKG}:push-probe" . | tail -n1
+          if docker push "ghcr.io/${PKG}:push-probe" 2>&1 | tail -n 6; then
+            echo "VERDICT: a PAT pushes while GITHUB_TOKEN does not -> the block is on"
+            echo "         the workflow identity (SAML SSO enforcement, or an org rule"
+            echo "         on who may CREATE a package), not on the image or Dockerfile."
+          else
+            echo "VERDICT: even the PAT was denied -> the namespace refuses this publisher."
+          fi
